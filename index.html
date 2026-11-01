@@ -176,6 +176,8 @@ ol{padding-left:20px;margin:8px 0}
   <button class="tile" onclick="view('pick')"><span class="ic">🔀</span><span><b>Playlist spelen</b><small>Digitaal, nummers komen in willekeurige volgorde</small></span></button>
   <button class="tile" onclick="openMaker()"><span class="ic">🖨️</span><span><b>Kaartjes maken</b><small>QR-kaartjes printen, 4 per A4</small></span></button>
 
+  <button class="tile" onclick="openWebplayer()"><span class="ic">🎧</span><span><b>Spotify-webplayer openen</b><small>Eenmalig aan het begin: start daar een nummer en kom terug</small></span></button>
+
   <div class="box">
     <h2>Afspelen</h2>
     <label for="sLen">Hoe lang speelt een nummer?</label>
@@ -355,6 +357,7 @@ function authUI(){
 
 /* ---------- Instellingen ---------- */
 const S={len:LS.len||'0',start:LS.start||'0'};
+function openWebplayer(){window.open('https://open.spotify.com/','_blank','noopener')}
 function saveSet(){S.len=$('#sLen').value;S.start=$('#sStart').value;LS.len=S.len;LS.start=S.start}
 
 /* ---------- Nummers ophalen ---------- */

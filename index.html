@@ -78,9 +78,6 @@ ol{padding-left:20px;margin:8px 0}
              repeating-radial-gradient(circle,transparent 0 5px,#ffffff10 5px 6px)}
 .disc.paused{animation-play-state:paused}
 @keyframes spin{to{transform:rotate(360deg)}}
-.diag{white-space:pre-wrap;word-break:break-word;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--y2);margin:10px 0 0;user-select:text}
-.wake{background:#0b0b0b;border:1.5px solid var(--y);border-radius:14px;padding:12px 14px;margin:0 0 14px}
-.wake b{color:var(--y2)}
 .q{font-size:22px;font-weight:800;text-align:center;margin:6px 0 2px}
 .title{font-size:24px;font-weight:800;text-align:center;margin:10px 0 0}
 .artist{text-align:center;color:var(--mut);margin:2px 0 14px}
@@ -197,13 +194,6 @@ ol{padding-left:20px;margin:8px 0}
     <p class="mut">Dit geldt voor scannen en voor playlist spelen. Bij "Heel nummer" doet de tweede keuze niets.</p>
   </div>
 
-  <div class="box">
-    <h2>Lukt afspelen niet?</h2>
-    <p class="mut">Tik hieronder en stuur me de tekst die verschijnt.</p>
-    <button class="sec" onclick="diagnose()">Diagnose uitvoeren</button>
-    <pre id="diag" class="diag"></pre>
-  </div>
-
   <p class="center"><button class="sec small" onclick="logout()">Ontkoppelen</button></p>
 </section>
 
@@ -222,17 +212,6 @@ ol{padding-left:20px;margin:8px 0}
   <div class="box">
     <p id="count" class="mut center" style="margin:0"></p>
     <div id="disc" class="disc"></div>
-    <div id="wake" class="wake hide">
-      <b>Het nummer start niet</b>
-      <p class="mut" style="margin:4px 0 10px">Tik op "Open Spotify", wacht even en kom terug naar IJspeer. Het nummer start dan vanzelf.</p>
-      <div class="row">
-        <button onclick="wakeSpotify()">Open Spotify</button>
-        <button class="sec" id="retryBtn" onclick="retryPlay()">Opnieuw proberen</button>
-      </div>
-      <button class="sec" style="width:100%;margin-top:10px" onclick="openInSpotify()">Speel dit nummer direct in de Spotify-app</button>
-      <p class="mut" style="margin:10px 0 0;font-size:12px">Wat Spotify antwoordt:</p>
-      <p id="wakeinfo" class="mut" style="margin:2px 0 0;font-size:12px;word-break:break-word"></p>
-    </div>
 
     <div id="hidden">
       <p class="q">Wat hoor je?</p>
@@ -328,8 +307,6 @@ let LS;try{LS=window.localStorage;LS.getItem('x')}catch(e){LS={}}
 const SCOPES='user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative';
 const redirectUri=location.origin+location.pathname;
 function toast(m,ms=3200){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',ms)}
-window.addEventListener('error',e=>toast('Fout in de app: '+e.message,9000));
-window.addEventListener('unhandledrejection',e=>toast('Fout in de app: '+((e.reason&&e.reason.message)||e.reason),9000));
 const VIEWS=['connect','menu','pick','card','maker'];
 function view(n){
   VIEWS.forEach(v=>$('#v-'+v).classList.toggle('hide',v!==n));
@@ -464,110 +441,16 @@ async function playTrack(tr){
   const len=+S.len;let pos=0;
   if(len>0){pos=Math.floor(tr.dur*(+S.start));pos=Math.max(0,Math.min(pos,tr.dur-(len+1)*1000))}
   const body=JSON.stringify({uris:['spotify:track:'+tr.id],position_ms:pos});
-  pending={body,len};
-  $('#wake').classList.add('hide');
   try{
-    if(await tryPlay(body)){startFrag(len);verifyPlay(tr,0)}
-    else{$('#wake').classList.remove('hide');showDbg()}
-  }catch(e){dbg.push(e.message);$('#wake').classList.remove('hide');showDbg()}
-}
-
-/* ---- Spotify-app wakker maken ---- */
-let pending=null,waking=false;
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let dbg=[];
-async function note(label,r){
-  let why='';
-  if(!r.ok&&r.status!==204){try{const j=await r.clone().json();why=(j.error&&(j.error.reason||j.error.message))||''}catch(e){}}
-  dbg.push(label+': '+r.status+(why?' ('+why+')':''));
-  return r;
-}
-function showDbg(){$('#wakeinfo').textContent=dbg.join(' · ')}
-async function devicesList(){
-  try{
-    const r=await note('apparaten',await api('/me/player/devices'));
-    if(!r.ok)return[];
-    const ds=(await r.json()).devices||[];
-    dbg.push('gevonden: '+(ds.length?ds.map(d=>d.name+' ['+d.type+(d.is_active?', actief':'')+']').join(', '):'geen'));
-    return ds;
-  }catch(e){dbg.push('apparaten: '+e.message);return[]}
-}
-async function tryPlay(body){
-  dbg=[];
-  let r=await note('afspelen',await api('/me/player/play',{method:'PUT',body}));
-  if(r.ok||r.status===204)return true;
-  const ds=await devicesList();
-  if(!ds.length)return false;
-  const d=ds.find(x=>x.is_active)||ds.find(x=>x.type==='Smartphone')||ds[0];
-  await note('overschakelen',await api('/me/player',{method:'PUT',body:JSON.stringify({device_ids:[d.id],play:false})}));
-  await sleep(700);
-  r=await note('afspelen op '+d.name,await api('/me/player/play?device_id='+d.id,{method:'PUT',body}));
-  return r.ok||r.status===204;
-}
-async function diagnose(){
-  const el=$('#diag'),out=[];el.textContent='Bezig…';
-  out.push('adres: '+redirectUri);
-  out.push('client id: '+(LS.clientId?LS.clientId.slice(0,6)+'…':'ontbreekt'));
-  out.push('ingelogd: '+(LS.token?'ja':'nee')+(LS.exp?', token geldig nog '+Math.round((+LS.exp-Date.now())/60000)+' min':''));
-  out.push('rechten gelijk aan app: '+(LS.scopes===SCOPES?'ja':'nee'));
-  const step=async(label,path)=>{
-    try{
-      const r=await api(path);let t='';
-      if(!r.ok&&r.status!==204){try{t=(await r.clone().text()).slice(0,200)}catch(e){}}
-      out.push(label+': '+r.status+(t?' '+t:''));return r;
-    }catch(e){out.push(label+': fout '+e.message)}
-  };
-  await step('profiel','/me');
-  const r=await step('apparaten','/me/player/devices');
-  if(r&&r.ok){
-    try{const j=await r.clone().json();
-      out.push('gevonden: '+((j.devices||[]).map(d=>d.name+' ['+d.type+(d.is_active?', actief':'')+']').join(', ')||'geen'))}catch(e){}
-  }
-  await step('speler','/me/player');
-  el.textContent=out.join('\n');
-}
-async function verifyPlay(tr,attempt){
-  await sleep(2500);
-  if(cur!==tr||paused)return;
-  try{
-    const r=await api('/me/player');
-    if(r.status===204){dbg.push('speler: niets actief');return failPlay()}
-    if(!r.ok)return;
-    const j=await r.json();
-    const same=j.item&&(j.item.id===tr.id||j.item.name===tr.title);
-    dbg.push('speler: '+(j.is_playing?'speelt':'staat stil')+' - '+((j.item&&j.item.name)||'geen nummer')+' op '+((j.device&&j.device.name)||'?'));
-    if(j.is_playing&&same){$('#wake').classList.add('hide');return}
-    if(attempt<1&&j.device&&j.device.id&&pending){
-      dbg.push('tweede poging op '+j.device.name);
-      await note('afspelen (2e keer)',await api('/me/player/play?device_id='+j.device.id,{method:'PUT',body:pending.body}));
-      return verifyPlay(tr,attempt+1);
+    let r=await api('/me/player/play',{method:'PUT',body});
+    if(r.status===404){
+      const d=await(await api('/me/player/devices')).json();
+      if(d.devices&&d.devices.length)r=await api('/me/player/play?device_id='+d.devices[0].id,{method:'PUT',body});
     }
-    failPlay();
-  }catch(e){}
+    if(r.ok||r.status===204)startFrag(len);
+    else toast('Afspelen lukt niet. Open de Spotify-app en start daar even een nummer.',5000);
+  }catch(e){toast(e.message)}
 }
-function failPlay(){$('#wake').classList.remove('hide');showDbg()}
-function openInSpotify(){if(cur)location.href='spotify:track:'+cur.id}
-function wakeSpotify(){
-  waking=true;
-  location.href='spotify://';
-  setTimeout(()=>{if(waking&&!document.hidden){waking=false;toast('Open de Spotify-app zelf, kom dan terug en tik op "Opnieuw proberen".',6000)}},2500);
-}
-async function retryPlay(){
-  if(!pending)return;
-  const btn=$('#retryBtn');btn.disabled=true;btn.textContent='Proberen…';
-  let ok=false;
-  for(let i=0;i<5&&!ok;i++){
-    try{ok=await tryPlay(pending.body)}catch(e){}
-    if(!ok)await sleep(1200);
-  }
-  btn.disabled=false;btn.textContent='Opnieuw proberen';
-  if(!ok)showDbg();
-  if(ok){$('#wake').classList.add('hide');startFrag(pending.len)}
-  else toast('Nog geen Spotify gevonden. Start in de Spotify-app even een nummer en probeer het dan nog eens.',6000);
-}
-document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden&&waking){waking=false;setTimeout(retryPlay,1200)}
-});
 function showCard(tr){
   cur=tr;
   $('#hidden').classList.remove('hide');$('#answer').classList.add('hide');

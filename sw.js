@@ -1,6 +1,6 @@
 // Service worker: laat de app starten als losse app. Altijd eerst het netwerk,
 // zodat een nieuwe versie meteen zichtbaar is. Spotify-verkeer wordt niet aangeraakt.
-const CACHE = 'ijspeer-sdk-v4';
+const CACHE = 'ijspeer-sdk-v6';
 
 self.addEventListener('install', e => {
   self.skipWaiting();

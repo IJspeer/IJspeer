@@ -68,6 +68,9 @@ code{background:#0b0b0b;color:var(--y2);padding:2px 6px;border-radius:6px;word-b
 details summary{cursor:pointer;font-weight:700;color:var(--y2)}
 ol{padding-left:20px;margin:8px 0}
 .small{padding:8px 14px!important;font-size:14px!important}
+.vol{display:flex;align-items:center;gap:10px;margin:0 0 16px}
+.vol span{font-size:18px}
+input[type=range]{border:0;background:transparent;padding:0;height:30px;accent-color:var(--y);cursor:pointer}
 a.lnk{color:var(--y2);font-weight:700;text-decoration:underline;text-underline-offset:3px}
 
 /* draaiende plaat */
@@ -216,6 +219,7 @@ a.lnk{color:var(--y2);font-weight:700;text-decoration:underline;text-underline-o
   <div class="box">
     <p id="count" class="mut center" style="margin:0"></p>
     <div id="disc" class="disc"></div>
+    <div class="vol"><span>🔈</span><input type="range" id="vol" min="0" max="100" step="1" value="80" aria-label="Volume" oninput="setVol(this.value)"><span>🔊</span></div>
 
     <div id="hidden">
       <p class="q">Wat hoor je?</p>
@@ -360,6 +364,7 @@ function authUI(){
 }
 
 /* ---------- Eigen speler (Spotify Web Playback SDK) ---------- */
+let vol=parseInt(LS.vol);if(isNaN(vol))vol=80;
 let spPlayer=null,spId=null;
 function spStatus(t){const e=$('#spStatus');if(e)e.textContent=t}
 async function freshToken(){
@@ -368,14 +373,20 @@ async function freshToken(){
 }
 window.initSdk=function(){
   if(spPlayer||!LS.token||LS.scopes!==SCOPES||!window.Spotify)return;
-  spPlayer=new Spotify.Player({name:'IJspeer',getOAuthToken:cb=>{freshToken().then(cb).catch(()=>cb(LS.token))},volume:0.9});
-  spPlayer.addListener('ready',({device_id})=>{spId=device_id;spStatus('✓ Eigen speler klaar: het geluid komt uit dit apparaat')});
+  spPlayer=new Spotify.Player({name:'IJspeer',getOAuthToken:cb=>{freshToken().then(cb).catch(()=>cb(LS.token))},volume:vol/100});
+  spPlayer.addListener('ready',({device_id})=>{spId=device_id;try{spPlayer.setVolume(vol/100)}catch(e){};spStatus('✓ Eigen speler klaar: het geluid komt uit dit apparaat')});
   spPlayer.addListener('not_ready',()=>{spId=null});
   spPlayer.addListener('initialization_error',()=>{spId=null;spStatus('Eigen speler werkt niet in deze browser. De Spotify-app of webplayer wordt gebruikt.')});
   spPlayer.addListener('authentication_error',()=>{spId=null;spStatus('Eigen speler: inloggen mislukt. Verbind opnieuw met Spotify.')});
   spPlayer.addListener('account_error',()=>{spId=null;spStatus('Eigen speler heeft Spotify Premium nodig.')});
   spPlayer.connect().then(ok=>{if(!ok)spStatus('Eigen speler kon niet starten. De Spotify-app of webplayer wordt gebruikt.')}).catch(()=>{});
 };
+function setVol(v){
+  vol=Math.max(0,Math.min(100,parseInt(v)||0));
+  try{LS.vol=String(vol)}catch(e){}
+  if(spPlayer&&spId){try{spPlayer.setVolume(vol/100)}catch(e){}}
+  else{clearTimeout(setVol.t);setVol.t=setTimeout(()=>api('/me/player/volume?volume_percent='+vol,{method:'PUT'}).catch(()=>{}),250)}
+}
 function activateSdk(){try{if(spPlayer&&spPlayer.activateElement)spPlayer.activateElement()}catch(e){}}
 document.addEventListener('click',activateSdk);
 if(window.__sdkReady)window.initSdk();
@@ -501,6 +512,7 @@ function togglePause(){
   else{resumeMusic();resumeFrag();setPausedUI(false)}
 }
 function reveal(){
+  clearFrag();pauseMusic();setPausedUI(true);
   $('#aTitle').textContent=cur.title;
   $('#aArtist').textContent=cur.artist;
   $('#aAlbum').textContent=cur.album||'–';
@@ -648,6 +660,7 @@ window.addEventListener('resize',fitSheets);
 /* ---------- Start ---------- */
 (async function(){
   $('#ruri').textContent=redirectUri;
+  $('#vol').value=vol;
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
   if(LS.clientId)$('#clientId').value=LS.clientId;
   $('#sLen').value=S.len;if($('#sLen').value!==String(S.len)){S.len='0';$('#sLen').value='0'}$('#sStart').value=S.start;

@@ -221,6 +221,9 @@ ol{padding-left:20px;margin:8px 0}
         <button onclick="wakeSpotify()">Open Spotify</button>
         <button class="sec" id="retryBtn" onclick="retryPlay()">Opnieuw proberen</button>
       </div>
+      <button class="sec" style="width:100%;margin-top:10px" onclick="openInSpotify()">Speel dit nummer direct in de Spotify-app</button>
+      <p class="mut" style="margin:10px 0 0;font-size:12px">Wat Spotify antwoordt:</p>
+      <p id="wakeinfo" class="mut" style="margin:2px 0 0;font-size:12px;word-break:break-word"></p>
     </div>
 
     <div id="hidden">
@@ -455,27 +458,43 @@ async function playTrack(tr){
   $('#wake').classList.add('hide');
   try{
     if(await tryPlay(body))startFrag(len);
-    else $('#wake').classList.remove('hide');
-  }catch(e){toast(e.message);$('#wake').classList.remove('hide')}
+    else{$('#wake').classList.remove('hide');showDbg()}
+  }catch(e){dbg.push(e.message);$('#wake').classList.remove('hide');showDbg()}
 }
 
 /* ---- Spotify-app wakker maken ---- */
 let pending=null,waking=false;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let dbg=[];
+async function note(label,r){
+  let why='';
+  if(!r.ok&&r.status!==204){try{const j=await r.clone().json();why=(j.error&&(j.error.reason||j.error.message))||''}catch(e){}}
+  dbg.push(label+': '+r.status+(why?' ('+why+')':''));
+  return r;
+}
+function showDbg(){$('#wakeinfo').textContent=dbg.join(' · ')}
 async function devicesList(){
-  try{const r=await api('/me/player/devices');if(!r.ok)return[];return(await r.json()).devices||[]}catch(e){return[]}
+  try{
+    const r=await note('apparaten',await api('/me/player/devices'));
+    if(!r.ok)return[];
+    const ds=(await r.json()).devices||[];
+    dbg.push('gevonden: '+(ds.length?ds.map(d=>d.name+' ['+d.type+(d.is_active?', actief':'')+']').join(', '):'geen'));
+    return ds;
+  }catch(e){dbg.push('apparaten: '+e.message);return[]}
 }
 async function tryPlay(body){
-  let r=await api('/me/player/play',{method:'PUT',body});
+  dbg=[];
+  let r=await note('afspelen',await api('/me/player/play',{method:'PUT',body}));
   if(r.ok||r.status===204)return true;
   const ds=await devicesList();
   if(!ds.length)return false;
   const d=ds.find(x=>x.is_active)||ds.find(x=>x.type==='Smartphone')||ds[0];
-  await api('/me/player',{method:'PUT',body:JSON.stringify({device_ids:[d.id],play:false})});
+  await note('overschakelen',await api('/me/player',{method:'PUT',body:JSON.stringify({device_ids:[d.id],play:false})}));
   await sleep(700);
-  r=await api('/me/player/play?device_id='+d.id,{method:'PUT',body});
+  r=await note('afspelen op '+d.name,await api('/me/player/play?device_id='+d.id,{method:'PUT',body}));
   return r.ok||r.status===204;
 }
+function openInSpotify(){if(cur)location.href='spotify:track:'+cur.id}
 function wakeSpotify(){
   waking=true;
   location.href='spotify://';
@@ -490,6 +509,7 @@ async function retryPlay(){
     if(!ok)await sleep(1200);
   }
   btn.disabled=false;btn.textContent='Opnieuw proberen';
+  if(!ok)showDbg();
   if(ok){$('#wake').classList.add('hide');startFrag(pending.len)}
   else toast('Nog geen Spotify gevonden. Start in de Spotify-app even een nummer en probeer het dan nog eens.',6000);
 }

@@ -177,6 +177,7 @@ ol{padding-left:20px;margin:8px 0}
   <button class="tile" onclick="openMaker()"><span class="ic">🖨️</span><span><b>Kaartjes maken</b><small>QR-kaartjes printen, 4 per A4</small></span></button>
 
   <button class="tile" onclick="openWebplayer()"><span class="ic">🎧</span><span><b>Spotify-webplayer openen</b><small>Eenmalig aan het begin: start daar een nummer en kom terug</small></span></button>
+  <p id="spStatus" class="mut center" style="font-size:13px;margin:-2px 0 8px"></p>
 
   <div class="box">
     <h2>Afspelen</h2>
@@ -299,6 +300,8 @@ ol{padding-left:20px;margin:8px 0}
 </div>
 <div id="toast"></div>
 
+<script>window.onSpotifyWebPlaybackSDKReady=function(){window.__sdkReady=true;if(window.initSdk)window.initSdk()}</script>
+<script src="https://sdk.scdn.co/spotify-player.js" async></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
@@ -306,7 +309,7 @@ const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let LS;try{LS=window.localStorage;LS.getItem('x')}catch(e){LS={}}
-const SCOPES='user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative';
+const SCOPES='user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative streaming user-read-email user-read-private';
 const redirectUri=location.origin+location.pathname;
 function toast(m,ms=3200){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',ms)}
 const VIEWS=['connect','menu','pick','card','maker'];
@@ -354,6 +357,27 @@ function authUI(){
   $('#reauth').classList.toggle('hide',!(LS.token&&!ok));
   view(ok?'menu':'connect');
 }
+
+/* ---------- Eigen speler (Spotify Web Playback SDK) ---------- */
+let spPlayer=null,spId=null;
+function spStatus(t){const e=$('#spStatus');if(e)e.textContent=t}
+async function freshToken(){
+  if(Date.now()>+LS.exp&&LS.refresh)await tokenRequest({grant_type:'refresh_token',refresh_token:LS.refresh});
+  return LS.token;
+}
+window.initSdk=function(){
+  if(spPlayer||!LS.token||LS.scopes!==SCOPES||!window.Spotify)return;
+  spPlayer=new Spotify.Player({name:'IJspeer',getOAuthToken:cb=>{freshToken().then(cb).catch(()=>cb(LS.token))},volume:0.9});
+  spPlayer.addListener('ready',({device_id})=>{spId=device_id;spStatus('✓ Eigen speler klaar: het geluid komt uit dit apparaat')});
+  spPlayer.addListener('not_ready',()=>{spId=null});
+  spPlayer.addListener('initialization_error',()=>{spId=null;spStatus('Eigen speler werkt niet in deze browser. De Spotify-app of webplayer wordt gebruikt.')});
+  spPlayer.addListener('authentication_error',()=>{spId=null;spStatus('Eigen speler: inloggen mislukt. Verbind opnieuw met Spotify.')});
+  spPlayer.addListener('account_error',()=>{spId=null;spStatus('Eigen speler heeft Spotify Premium nodig.')});
+  spPlayer.connect().then(ok=>{if(!ok)spStatus('Eigen speler kon niet starten. De Spotify-app of webplayer wordt gebruikt.')}).catch(()=>{});
+};
+function activateSdk(){try{if(spPlayer&&spPlayer.activateElement)spPlayer.activateElement()}catch(e){}}
+document.addEventListener('click',activateSdk);
+if(window.__sdkReady)window.initSdk();
 
 /* ---------- Instellingen ---------- */
 const S={len:LS.len||'0',start:LS.start||'0'};
@@ -445,10 +469,17 @@ async function playTrack(tr){
   if(len>0){pos=Math.floor(tr.dur*(+S.start));pos=Math.max(0,Math.min(pos,tr.dur-(len+1)*1000))}
   const body=JSON.stringify({uris:['spotify:track:'+tr.id],position_ms:pos});
   try{
-    let r=await api('/me/player/play',{method:'PUT',body});
-    if(r.status===404){
-      const d=await(await api('/me/player/devices')).json();
-      if(d.devices&&d.devices.length)r=await api('/me/player/play?device_id='+d.devices[0].id,{method:'PUT',body});
+    let r=null;
+    if(spId){
+      r=await api('/me/player/play?device_id='+spId,{method:'PUT',body});
+      if(!(r.ok||r.status===204))r=null;
+    }
+    if(!r){
+      r=await api('/me/player/play',{method:'PUT',body});
+      if(r.status===404){
+        const d=await(await api('/me/player/devices')).json();
+        if(d.devices&&d.devices.length)r=await api('/me/player/play?device_id='+d.devices[0].id,{method:'PUT',body});
+      }
     }
     if(r.ok||r.status===204)startFrag(len);
     else toast('Afspelen lukt niet. Open de Spotify-app en start daar even een nummer.',5000);
@@ -621,7 +652,7 @@ window.addEventListener('resize',fitSheets);
   buildPickers();
   await handleCallback();
   authUI();
-  if(LS.token&&LS.scopes===SCOPES)fillPickers();
+  if(LS.token&&LS.scopes===SCOPES){fillPickers();window.initSdk()}
 })();
 </script>
 </body>

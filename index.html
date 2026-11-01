@@ -78,6 +78,7 @@ ol{padding-left:20px;margin:8px 0}
              repeating-radial-gradient(circle,transparent 0 5px,#ffffff10 5px 6px)}
 .disc.paused{animation-play-state:paused}
 @keyframes spin{to{transform:rotate(360deg)}}
+.diag{white-space:pre-wrap;word-break:break-word;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--y2);margin:10px 0 0;user-select:text}
 .wake{background:#0b0b0b;border:1.5px solid var(--y);border-radius:14px;padding:12px 14px;margin:0 0 14px}
 .wake b{color:var(--y2)}
 .q{font-size:22px;font-weight:800;text-align:center;margin:6px 0 2px}
@@ -194,6 +195,13 @@ ol{padding-left:20px;margin:8px 0}
       <option value="0.5">In het midden</option>
     </select>
     <p class="mut">Dit geldt voor scannen en voor playlist spelen. Bij "Heel nummer" doet de tweede keuze niets.</p>
+  </div>
+
+  <div class="box">
+    <h2>Lukt afspelen niet?</h2>
+    <p class="mut">Tik hieronder en stuur me de tekst die verschijnt.</p>
+    <button class="sec" onclick="diagnose()">Diagnose uitvoeren</button>
+    <pre id="diag" class="diag"></pre>
   </div>
 
   <p class="center"><button class="sec small" onclick="logout()">Ontkoppelen</button></p>
@@ -320,6 +328,8 @@ let LS;try{LS=window.localStorage;LS.getItem('x')}catch(e){LS={}}
 const SCOPES='user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative';
 const redirectUri=location.origin+location.pathname;
 function toast(m,ms=3200){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',ms)}
+window.addEventListener('error',e=>toast('Fout in de app: '+e.message,9000));
+window.addEventListener('unhandledrejection',e=>toast('Fout in de app: '+((e.reason&&e.reason.message)||e.reason),9000));
 const VIEWS=['connect','menu','pick','card','maker'];
 function view(n){
   VIEWS.forEach(v=>$('#v-'+v).classList.toggle('hide',v!==n));
@@ -493,6 +503,28 @@ async function tryPlay(body){
   await sleep(700);
   r=await note('afspelen op '+d.name,await api('/me/player/play?device_id='+d.id,{method:'PUT',body}));
   return r.ok||r.status===204;
+}
+async function diagnose(){
+  const el=$('#diag'),out=[];el.textContent='Bezig…';
+  out.push('adres: '+redirectUri);
+  out.push('client id: '+(LS.clientId?LS.clientId.slice(0,6)+'…':'ontbreekt'));
+  out.push('ingelogd: '+(LS.token?'ja':'nee')+(LS.exp?', token geldig nog '+Math.round((+LS.exp-Date.now())/60000)+' min':''));
+  out.push('rechten gelijk aan app: '+(LS.scopes===SCOPES?'ja':'nee'));
+  const step=async(label,path)=>{
+    try{
+      const r=await api(path);let t='';
+      if(!r.ok&&r.status!==204){try{t=(await r.clone().text()).slice(0,200)}catch(e){}}
+      out.push(label+': '+r.status+(t?' '+t:''));return r;
+    }catch(e){out.push(label+': fout '+e.message)}
+  };
+  await step('profiel','/me');
+  const r=await step('apparaten','/me/player/devices');
+  if(r&&r.ok){
+    try{const j=await r.clone().json();
+      out.push('gevonden: '+((j.devices||[]).map(d=>d.name+' ['+d.type+(d.is_active?', actief':'')+']').join(', ')||'geen'))}catch(e){}
+  }
+  await step('speler','/me/player');
+  el.textContent=out.join('\n');
 }
 function openInSpotify(){if(cur)location.href='spotify:track:'+cur.id}
 function wakeSpotify(){

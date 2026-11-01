@@ -186,8 +186,6 @@ a.lnk{color:var(--y2);font-weight:700;text-decoration:underline;text-underline-o
       <option value="15">Fragment van 15 seconden</option>
       <option value="30">Fragment van 30 seconden</option>
       <option value="45">Fragment van 45 seconden</option>
-      <option value="r15">Willekeurig: 3 tot 15 seconden</option>
-      <option value="r30">Willekeurig: 5 tot 30 seconden</option>
     </select>
     <label for="sStart">Waar begint het fragment?</label>
     <select id="sStart" onchange="saveSet()">
@@ -195,7 +193,7 @@ a.lnk{color:var(--y2);font-weight:700;text-decoration:underline;text-underline-o
       <option value="0.33">Na een derde van het nummer</option>
       <option value="0.5">In het midden</option>
     </select>
-    <p class="mut">Dit geldt voor scannen en voor playlist spelen. Bij "Willekeurig" krijgt elk nummer een andere lengte, dus je weet nooit hoe lang je mag luisteren. Bij "Heel nummer" doet de tweede keuze niets.</p>
+    <p class="mut">Dit geldt voor scannen en voor playlist spelen. Bij "Heel nummer" doet de tweede keuze niets.</p>
   </div>
 
   <p class="mut center" style="font-size:14px;margin:18px 0 6px">Zelf kaartjes maken? Dat kan gemakkelijk <a href="#" class="lnk" onclick="openMaker();return false">via hier</a>.</p>
@@ -384,14 +382,7 @@ if(window.__sdkReady)window.initSdk();
 
 /* ---------- Instellingen ---------- */
 const S={len:LS.len||'0',start:LS.start||'0'};
-function pickLen(){
-  const v=String(S.len||'0');
-  if(v.charAt(0)==='r'){
-    const max=parseInt(v.slice(1))||15,min=max>=30?5:3;
-    return min+Math.floor(Math.random()*(max-min+1));
-  }
-  return parseInt(v)||0;
-}
+function pickLen(){return parseInt(S.len)||0}
 function saveSet(){S.len=$('#sLen').value;S.start=$('#sStart').value;LS.len=S.len;LS.start=S.start}
 
 /* ---------- Nummers ophalen ---------- */
@@ -499,7 +490,7 @@ function showCard(tr){
   cur=tr;
   $('#hidden').classList.remove('hide');$('#answer').classList.add('hide');
   tr.fragLen=pickLen();
-  const frag=tr.fragLen>0?(String(S.len).charAt(0)==='r'?' · willekeurig fragment':' · fragment van '+tr.fragLen+' s'):'';
+  const frag=tr.fragLen>0?' · fragment van '+tr.fragLen+' s':'';
   $('#count').textContent=mode==='shuffle'?`Nummer ${qi} van ${queue.length}${frag}`:(frag?frag.slice(3):'');
   $('#nextBtn').textContent=mode==='shuffle'?'Volgende nummer →':'📷 Volgende kaartje';
   view('card');playTrack(tr);
@@ -659,7 +650,7 @@ window.addEventListener('resize',fitSheets);
   $('#ruri').textContent=redirectUri;
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
   if(LS.clientId)$('#clientId').value=LS.clientId;
-  $('#sLen').value=S.len;$('#sStart').value=S.start;
+  $('#sLen').value=S.len;if($('#sLen').value!==String(S.len)){S.len='0';$('#sLen').value='0'}$('#sStart').value=S.start;
   buildPickers();
   await handleCallback();
   authUI();

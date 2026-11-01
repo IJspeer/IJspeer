@@ -68,6 +68,7 @@ code{background:#0b0b0b;color:var(--y2);padding:2px 6px;border-radius:6px;word-b
 details summary{cursor:pointer;font-weight:700;color:var(--y2)}
 ol{padding-left:20px;margin:8px 0}
 .small{padding:8px 14px!important;font-size:14px!important}
+a.lnk{color:var(--y2);font-weight:700;text-decoration:underline;text-underline-offset:3px}
 
 /* draaiende plaat */
 .disc{width:160px;height:160px;margin:8px auto 14px;border-radius:50%;position:relative;animation:spin 3.2s linear infinite;
@@ -174,10 +175,8 @@ ol{padding-left:20px;margin:8px 0}
 
   <button class="tile" onclick="startScan()"><span class="ic">📷</span><span><b>Kaartje scannen</b><small>Voor de fysieke kaartjes met QR-code</small></span></button>
   <button class="tile" onclick="view('pick')"><span class="ic">🔀</span><span><b>Playlist spelen</b><small>Digitaal, nummers komen in willekeurige volgorde</small></span></button>
-  <button class="tile" onclick="openMaker()"><span class="ic">🖨️</span><span><b>Kaartjes maken</b><small>QR-kaartjes printen, 4 per A4</small></span></button>
 
-  <button class="tile" onclick="openWebplayer()"><span class="ic">🎧</span><span><b>Spotify-webplayer openen</b><small>Eenmalig aan het begin: start daar een nummer en kom terug</small></span></button>
-  <p id="spStatus" class="mut center" style="font-size:13px;margin:-2px 0 8px"></p>
+  <p id="spStatus" class="mut center" style="font-size:13px;margin:8px 0"></p>
 
   <div class="box">
     <h2>Afspelen</h2>
@@ -187,6 +186,8 @@ ol{padding-left:20px;margin:8px 0}
       <option value="15">Fragment van 15 seconden</option>
       <option value="30">Fragment van 30 seconden</option>
       <option value="45">Fragment van 45 seconden</option>
+      <option value="r15">Willekeurig: 3 tot 15 seconden</option>
+      <option value="r30">Willekeurig: 5 tot 30 seconden</option>
     </select>
     <label for="sStart">Waar begint het fragment?</label>
     <select id="sStart" onchange="saveSet()">
@@ -194,8 +195,10 @@ ol{padding-left:20px;margin:8px 0}
       <option value="0.33">Na een derde van het nummer</option>
       <option value="0.5">In het midden</option>
     </select>
-    <p class="mut">Dit geldt voor scannen en voor playlist spelen. Bij "Heel nummer" doet de tweede keuze niets.</p>
+    <p class="mut">Dit geldt voor scannen en voor playlist spelen. Bij "Willekeurig" krijgt elk nummer een andere lengte, dus je weet nooit hoe lang je mag luisteren. Bij "Heel nummer" doet de tweede keuze niets.</p>
   </div>
+
+  <p class="mut center" style="font-size:14px;margin:18px 0 6px">Zelf kaartjes maken? Dat kan gemakkelijk <a href="#" class="lnk" onclick="openMaker();return false">via hier</a>.</p>
 
   <p class="center"><button class="sec small" onclick="logout()">Ontkoppelen</button></p>
 </section>
@@ -381,7 +384,14 @@ if(window.__sdkReady)window.initSdk();
 
 /* ---------- Instellingen ---------- */
 const S={len:LS.len||'0',start:LS.start||'0'};
-function openWebplayer(){window.open('https://open.spotify.com/','_blank','noopener')}
+function pickLen(){
+  const v=String(S.len||'0');
+  if(v.charAt(0)==='r'){
+    const max=parseInt(v.slice(1))||15,min=max>=30?5:3;
+    return min+Math.floor(Math.random()*(max-min+1));
+  }
+  return parseInt(v)||0;
+}
 function saveSet(){S.len=$('#sLen').value;S.start=$('#sStart').value;LS.len=S.len;LS.start=S.start}
 
 /* ---------- Nummers ophalen ---------- */
@@ -465,7 +475,7 @@ const resumeMusic=()=>api('/me/player/play',{method:'PUT'}).catch(()=>{});
 
 async function playTrack(tr){
   clearFrag();setPausedUI(false);
-  const len=+S.len;let pos=0;
+  const len=tr.fragLen!=null?tr.fragLen:pickLen();let pos=0;
   if(len>0){pos=Math.floor(tr.dur*(+S.start));pos=Math.max(0,Math.min(pos,tr.dur-(len+1)*1000))}
   const body=JSON.stringify({uris:['spotify:track:'+tr.id],position_ms:pos});
   try{
@@ -488,7 +498,8 @@ async function playTrack(tr){
 function showCard(tr){
   cur=tr;
   $('#hidden').classList.remove('hide');$('#answer').classList.add('hide');
-  const frag=+S.len>0?' · fragment van '+S.len+' s':'';
+  tr.fragLen=pickLen();
+  const frag=tr.fragLen>0?(String(S.len).charAt(0)==='r'?' · willekeurig fragment':' · fragment van '+tr.fragLen+' s'):'';
   $('#count').textContent=mode==='shuffle'?`Nummer ${qi} van ${queue.length}${frag}`:(frag?frag.slice(3):'');
   $('#nextBtn').textContent=mode==='shuffle'?'Volgende nummer →':'📷 Volgende kaartje';
   view('card');playTrack(tr);

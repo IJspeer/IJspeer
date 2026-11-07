@@ -105,21 +105,18 @@ a.lnk{color:var(--y2);font-weight:700;text-decoration:underline;text-underline-o
 .sheet{width:210mm;height:297mm;background:#fff;color:#000;transform:scale(var(--s,1));transform-origin:0 0;position:relative;overflow:hidden;
   -webkit-print-color-adjust:exact;print-color-adjust:exact}
 .sheet.A{padding:12.5mm 15mm}
-.sheet.B{padding:28.5mm 15mm}
+.sheet.B{padding:12.5mm 15mm}
 .pair,.crow{display:flex}
 .pair{height:68mm;width:180mm}
 .cf,.cb{width:90mm;height:68mm;border:.25mm dashed #777;box-sizing:border-box;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;text-align:center;padding:4mm;
   -webkit-print-color-adjust:exact;print-color-adjust:exact}
-.sheet.B .cf,.sheet.B .cb{height:120mm}
 .cf svg{width:52mm;height:52mm;display:block}
-.sheet.B .cf svg{width:64mm;height:64mm}
 .cf.dark,.cb.dark{background:#0b0b0b;color:#ffd400}
 .cf.dark svg{box-shadow:0 0 0 1.6mm #ffd400}
 .cf.light,.cb.light{background:#fff;color:#000}
 .num{position:absolute;top:2.5mm;left:3.5mm;font:700 8pt system-ui,Arial,sans-serif;opacity:.85}
 .cf .num{top:auto;bottom:2.5mm}
 .cb .by{font:900 34pt system-ui,Arial,sans-serif;line-height:1;margin-bottom:2mm}
-.sheet.B .cb .by{font-size:48pt}
 .cb .bt{font:800 16pt/1.15 system-ui,Arial,sans-serif;margin:1mm 0}
 .cb .ba{font:500 11pt/1.2 system-ui,Arial,sans-serif;opacity:.9}
 .cb .bu{font:600 10pt/1.2 system-ui,Arial,sans-serif;margin-top:2.5mm;opacity:.9}
@@ -272,7 +269,7 @@ a.lnk{color:var(--y2);font-weight:700;text-decoration:underline;text-underline-o
     <label for="oLayout">Indeling op A4</label>
     <select id="oLayout">
       <option value="A">4 kaartjes per pagina, voor- en achterkant naast elkaar (uitknippen en vouwen)</option>
-      <option value="B">4 kaartjes per pagina, dubbelzijdig printen (voorkant en achterkant apart)</option>
+      <option value="B">8 kaartjes per pagina, dubbelzijdig printen (voorkant en achterkant apart)</option>
     </select>
     <label for="oColor">Kleur</label>
     <select id="oColor">
@@ -626,14 +623,15 @@ function buildSheets(){
   let list=M.tracks.slice();
   if($('#oShuf').checked)shuffle(list);
   const html=[];
-  for(let s=0;s<list.length;s+=4){
-    const chunk=list.slice(s,s+4).map((t,k)=>({t,i:s+k}));
+  const per=o.layout==='A'?4:8;
+  for(let s=0;s<list.length;s+=per){
+    const chunk=list.slice(s,s+per).map((t,k)=>({t,i:s+k}));
     if(o.layout==='A'){
       html.push(wrap(`<div class="sheet A">${chunk.map(c=>`<div class="pair">${frontHTML(c.t,c.i,o)}${backHTML(c.t,c.i,o)}</div>`).join('')}</div>`));
     }else{
-      const rows=[chunk.slice(0,2),chunk.slice(2,4)].filter(r=>r.length);
+      const rows=[];for(let k=0;k<chunk.length;k+=2)rows.push(chunk.slice(k,k+2));
       html.push(wrap(`<div class="sheet B">${rows.map(r=>`<div class="crow">${r.map(c=>frontHTML(c.t,c.i,o)).join('')}</div>`).join('')}</div>`));
-      html.push(wrap(`<div class="sheet B">${rows.map(r=>`<div class="crow">${r.slice().reverse().map(c=>backHTML(c.t,c.i,o)).join('')}</div>`).join('')}</div>`));
+      html.push(wrap(`<div class="sheet B">${rows.map(r=>`<div class="crow">${r.length<2?`<div class="cb ${o.theme}" style="visibility:hidden"></div>`:''}${r.slice().reverse().map(c=>backHTML(c.t,c.i,o)).join('')}</div>`).join('')}</div>`));
     }
   }
   if($('#oAns').checked){
